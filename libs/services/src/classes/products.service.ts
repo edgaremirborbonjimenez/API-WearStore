@@ -1,48 +1,53 @@
 import { Product } from '@app/entities/classes/product.entity';
-import { Injectable } from '@nestjs/common';
-import { retry } from 'rxjs';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+
 
 
 @Injectable()
 export class ProductsService {
-    private Products = []
+    
+    constructor(@InjectRepository(Product) private readonly productsRepository: Repository<Product>){
 
-    findAll(){
-        return this.Products
+    }
+
+    async findAll(): Promise<Product[]>{
+        return await this.productsRepository.find()
     }
     
-    findOne(id: number){
-        const product = this.Products.find(product => product.id === id)
+    async findOne(id: string): Promise<Product>{
+        const product = await this.productsRepository.findOne({where:{id}})
 
         return product
     }
     
-    create(product: {name: string, price: number, stock: number}){
-        const productsByHighestId = [...this.Products].sort((a,b)=> b.id - a.id)
-        const newProduct = {
-            id: productsByHighestId[0].id + 1,
-            ...product
-        }
-        this.Products.push(newProduct)
-        return newProduct
+    async create(products){
+        const product = this.productsRepository.create({products})
+        return this.productsRepository.save(product);
     }
 
-    update (id:number,updatedProduct:{name?: string, price?: number, stock? : number}){
-        this.Products = this.Products.map(product => {
-            if(product.id === id){
-                return { ...product, ...updatedProduct }
-            }
-            return product
-        })
+    async update (id:string,{name, price, stock}){
+        const product: Product = await this.productsRepository.preload({
+            id,
+            name,
+            price,
+            stock
 
-        return this.findOne(id)
+        });
+        if(!product){
+            throw new NotFoundException('Resource not found')
+        }
+        return product;
     }
     
-    delete (id:number) {
-        const removedProduct = this.findOne(id)
-
-        this.Products = this.Products.filter(product => product.id !== id)
-
-        return removedProduct
+    async delete (id:string): Promise<void> {
+        const product: Product = await this.productsRepository.findOne({where:{id}})
+        
+        if(!product){
+            throw new NotFoundException('Resource not found')
+        }
+        
+        this.productsRepository.remove(product);
     }
 }
